@@ -42,7 +42,9 @@ public:
     void setLoopStartTimeOffset(int a);
     void setLoopEndTimeOffset(int b);
     void setShouldLoop(int shouldLoop);
+    float fadeLengthInSeconds();
     char* getFilename();
+    void setGain(float g);
 
     int frames2Milliseconds(int frames);
     int milliseconds2Frames(int millis);
@@ -84,6 +86,7 @@ private:
     float gFadeAmount;
     float gFadeLengthInSeconds;
     int gFadeDirection;
+    float gGain;
     
     int gBusy;
     

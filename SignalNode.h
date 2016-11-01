@@ -78,7 +78,7 @@ public:
     void setTarget(float target);
     uint64_t getFramesToTarget();
     void setFramesToTarget(uint64_t framesToTarget);
-    void setMillisecondsToTarget(uint64_t millis);
+    void setSecondsToTarget(float secs);
 
 
 private:
@@ -102,9 +102,13 @@ public:
 
     virtual uint64_t process();
     virtual void prepare();
+
+    void play();
+    void stop();
+    void setGain(float g);
     
-    
-private:
+    char *getFilename();
+
     SampleStream *stream;
 
 };

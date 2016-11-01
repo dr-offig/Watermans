@@ -215,9 +215,9 @@ void ParameterAutomationNode::setFramesToTarget(uint64_t framesToTarget)
 }
 
 
-void ParameterAutomationNode::setMillisecondsToTarget(uint64_t millis)
+void ParameterAutomationNode::setSecondsToTarget(float secs)
 {
-    setFramesToTarget ((millis * 1000) / ((int)outputSampleRate));
+    setFramesToTarget((uint64_t)(secs * outputSampleRate));
 }
 
 
@@ -285,6 +285,18 @@ FilePlayerNode& FilePlayerNode::operator=(const FilePlayerNode& s)
 }
 
 
+void FilePlayerNode::play()
+{
+    stream->togglePlaybackWithFade(1,stream->fadeLengthInSeconds());
+}
+
+
+void FilePlayerNode::stop()
+{
+    stream->togglePlaybackWithFade(0,stream->fadeLengthInSeconds());
+}
+
+
 uint64_t FilePlayerNode::process()
 {
     // FilePlayer node has no inputs, just grab samples from the stream
@@ -305,3 +317,14 @@ void FilePlayerNode::prepare()
         stream->fillBuffer();
 }
 
+
+char *FilePlayerNode::getFilename()
+{
+    return stream->getFilename();
+}
+
+
+void FilePlayerNode::setGain(float g)
+{
+    stream->setGain(g);
+}

@@ -103,6 +103,8 @@ int SampleStream::openFile(const char* filename, int bufferLength) {
     gFadeLengthInSeconds = 0.1;
     gFadeDirection = -1;
     
+    gGain = 1.0f;
+    
     gNumFramesInFile = sfinfo.frames;
     gLoopStartFrame = 0;
     gLoopEndFrame = gNumFramesInFile;
@@ -157,7 +159,7 @@ float SampleStream::getSample(int channel) {
     if(gPlaying) {
         // Wrap channel index in case there are more audio output channels than the file contains
         float out = gSampleBuf[gActiveBuffer][channel%gNumChannelsInFile].samples[gReadPtr];
-    	return out * gFadeAmount * gFadeAmount;
+    	return out * gFadeAmount * gFadeAmount * gGain;
     }
     return 0;
 	
@@ -308,6 +310,10 @@ int SampleStream::milliseconds2Frames(int millis) {
 }
 
 
+float SampleStream::fadeLengthInSeconds()
+{
+    return gFadeLengthInSeconds;
+}
 
 
 // private libsndfile wrappers (previously in SampleLoader.h)
@@ -368,6 +374,12 @@ int SampleStream::getSamples(const char* file, float *buf, int channel, int star
 char* SampleStream::getFilename()
 {
     return gFilename;
+}
+
+
+void SampleStream::setGain(float g)
+{
+    gGain = g;
 }
 
 

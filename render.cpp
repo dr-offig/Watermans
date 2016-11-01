@@ -52,8 +52,9 @@ using namespace std;
 Scope scope;
 
 //SampleStream *sampleStream[NUM_STREAMS];
+AnimationTimer *stopwatch;
 SoundAnimation *animation;
-vector<SignalNode*> *pSignals;
+//vector<SignalNode*> *pSignals;
 //uint64_t numActiveSignalNodes;
 
 
@@ -65,6 +66,7 @@ int gStopThreads = 0;
 int gTaskStopped = 0;
 int gCount = 0;
 
+AuxiliaryTask checkScheduleTask;
 
 void fillBuffers() {
 
@@ -80,14 +82,12 @@ void fillBuffers() {
     }
     */
     
-    unsigned n = pSignals->size();
+    unsigned n = animation->outputNodes.size();
     for (unsigned i=0; i<n; i++)
     {
-        pSignals->at(i)->prepare();
+        animation->outputNodes.at(i)->prepare();
     }
-    
-    
-    
+
 }
 
 
@@ -105,14 +105,34 @@ void readOSC()
 ***************************************/
 
 
+void checkSchedule()
+{
+    while ( (animation->schedule.size() > 0) 
+            && (animation->schedule.front().first < stopwatch->currentTimeInSeconds()) )
+    {
+        Action *action = animation->schedule.front().second;
+        action->perform();
+        delete(action);
+        animation->schedule.pop_front();
+    }
+    
+
+}
+
 
 bool setup(BelaContext *context, void *userData)
 {
-    
+    // Set clock to run at audioSampleRate
+    stopwatch = new AnimationTimer();
+    stopwatch->secondsPerFrame = 1.0f / (context->audioSampleRate);
+ 
+ 
     // Read in the sound animation files
     animation = new SoundAnimation("sound_animation.txt");
-    printf("Animation has %d sound objects and %d background soundscapes", animation->soundObjects.size(),animation->soundBeds.size());
+    printf("Animation has %d signal nodes and %d scheduled actions", animation->outputNodes.size(),animation->schedule.size());
+    animation->printSchedule();
  
+    /*
     for(unsigned i=0;i<animation->soundObjects.size();i++) {
         // Start all streams playing
         animation->soundObjects.at(i)->stream->togglePlayback(1);
@@ -125,7 +145,7 @@ bool setup(BelaContext *context, void *userData)
 
     unsigned ns = animation->soundObjects.size() + animation->soundBeds.size() + 1;
     scope.setup(ns, context->audioSampleRate);
-
+    */
  
  
     /***** Prepare Streams *****
@@ -167,6 +187,10 @@ bool setup(BelaContext *context, void *userData)
     if ((ttyTask = Bela_createAuxiliaryTask(readSerialPort, 50, "bela-arduino-comms")) == 0)
         return false;
 
+    if ((checkScheduleTask = Bela_createAuxiliaryTask(checkSchedule, 30, "check-schedule")) == 0)
+        return false;
+
+
     /****** OSC is currently disabled *****
     if ((oscTask = Bela_createAuxiliaryTask(readOSC, 50, "bela-osc")) == 0)
         return false;
@@ -186,6 +210,10 @@ void render(BelaContext *context, void *userData)
     // Read in sensor data
     Bela_scheduleAuxiliaryTask(ttyTask);
 
+    // Check the action schedule
+    Bela_scheduleAuxiliaryTask(checkScheduleTask);
+    
+    
     
     /*****
     // random playback toggling
@@ -212,46 +240,45 @@ void render(BelaContext *context, void *userData)
     for(unsigned int n = 0; n < context->audioFrames; n++) {
 
         // Read in audio data from streams
-        for(unsigned i=0;i<animation->soundObjects.size();i++) {
-            animation->soundObjects.at(i)->stream->processFrame();
-            animation->soundObjects.at(i)->update(1);
+        for(unsigned i=0;i<animation->outputNodes.size();i++) {
+            animation->outputNodes.at(i)->stream->processFrame();
+            //animation->soundObjects.at(i)->update(1);
         }
 
-        for(unsigned i=0;i<animation->soundBeds.size();i++) {
-            animation->soundBeds.at(i)->stream->processFrame();
-            animation->soundBeds.at(i)->update(1);
-        }
+        // for(unsigned i=0;i<animation->outputNodes.size();i++) {
+        //     animation->outputNodes.at(i)->stream->processFrame();
+        //     //animation->soundBeds.at(i)->update(1);
+        // }
 
         
         // Output audio
     	for(unsigned int channel = 0; channel < context->audioOutChannels; channel++) {
     	    
-            float out = 0.0f; float objOut = 0.0f; float bedOut = 0.0f;
-            for(unsigned i=0;i<animation->soundObjects.size();i++) {
+            float out = 0.0f;
+            for(unsigned i=0;i<animation->outputNodes.size();i++) {
                 // get samples for each channel from each sampleStream object
-                objOut = animation->soundObjects.at(i)->stream->getSample(channel);
-                out += objOut;
+                out += animation->outputNodes.at(i)->stream->getSample(channel);
             }
 
-            for(unsigned i=0;i<animation->soundObjects.size();i++) {
-                // get samples for each channel from each sampleStream object
-                bedOut = animation->soundObjects.at(i)->stream->getSample(channel);
-                out += bedOut;
-            }
-
-            scope.log(out, objOut, bedOut);
+            scope.log(out);
 
             // you may need to attenuate the output depending on the amount of streams playing back
             float compressedOut = tanh(out);
             audioWrite(context, n, channel, compressedOut);
             
     	}
+    
+        stopwatch->tick();
     	
     }
+    
+    
+    
 }
 
 
 void cleanup(BelaContext *context, void *userData)
 {
     delete(animation);
+    delete(stopwatch);
 }
