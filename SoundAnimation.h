@@ -10,22 +10,27 @@
 #include <list>
 
 
-
 using namespace std;
 
-class Clock
+class AnimationTimer
 {
 public:
-    int hour();
-    int min();
-    int sec();
-    int milli();
+    // int hour();
+    // int min();
+    // int sec();
+    // int milli();
     
-    static uint64_t calculate(int hh, int mm, int ss, int mss);
-    uint64_t set(int hh, int mm, int ss, int mss);
+    static float calculate(int hh, int mm, int ss, int mss);
+    float set(int hh, int mm, int ss, int mss);
+    float tick();
+    float currentTimeInSeconds();
+    
+    float secondsPerFrame;
+
 
 private:
-    uint64_t _ticks; 
+    float _timeInSeconds; 
+    unsigned _counter;
 };
 
 
@@ -33,11 +38,37 @@ private:
 class Action
 {
 public:
-    void perform();
-    ParameterAutomationNode* param;
-    float targetValue;
-    uint64_t timeToTarget;
+    virtual ~Action();
+    virtual void perform() = 0;
+    virtual char *toString() = 0;
+
+    SignalNode* _node;
 };
+
+
+class ParameterAutomationAction : public Action
+{
+public:
+    virtual void perform();
+    virtual ~ParameterAutomationAction();
+    virtual char *toString();
+
+    float _targetValue;
+    float _timeToTarget;
+};
+
+
+class PlayFileAction : public Action
+{
+public:
+    PlayFileAction(FilePlayerNode*, bool);
+    virtual ~PlayFileAction();
+    virtual void perform();
+    virtual char *toString();
+    
+    bool _playing;
+};
+
 
 
 class SoundAnimation
@@ -52,15 +83,17 @@ public:
     vector<ParameterAutomationNode*> automations;
     
     //vector<KeyFrame*>keyFrames;
-    list<pair<uint64_t,Action*> >schedule;
+    list<pair<float,Action*> >schedule;
     vector<FilePlayerNode*>* getOutputNodes();
+    
+    void printSchedule();
 
 
 private:
     int parseSoundAnimationFile(const char *filename);
     int parseKeyFrame(char *keyFrame);
     
-    uint64_t _time;
+    float _time;
     //SoundObject* _soundObject;
     //SoundBed* _soundBed;
     FilePlayerNode* _soundObject;
@@ -73,6 +106,5 @@ private:
     float _width;
 
 };
-
 
 #endif

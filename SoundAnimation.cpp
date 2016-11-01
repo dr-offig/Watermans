@@ -4,52 +4,138 @@
 #include "SoundAnimation.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 //enum AnimationObjectType { ANIM_OBJ_TYPE_INVALID, ANIM_OBJ_TYPE_DIRECTIONAL, ANIM_OBJ_TYPE_FIXED };
 
 
-uint64_t Clock::calculate(int hh, int mm, int ss, int mss)
+float AnimationTimer::calculate(int hh, int mm, int ss, int mss)
 {
-    return ((hh * 60 + mm) * 60 + ss) * 1000 + mss;
-}
-
-uint64_t Clock::set(int hh, int mm, int ss, int mss)
-{
-    _ticks = Clock::calculate(hh,mm,ss,mss);
-    return _ticks;
+    int millis = ((hh * 60 + mm) * 60 + ss) * 1000 + mss;
+    float mf = (float)millis;
+    return mf / 1000.0f;
 }
 
 
-int Clock::milli()
+float AnimationTimer::set(int hh, int mm, int ss, int mss)
 {
-    return (_ticks % 1000);
+    _timeInSeconds = AnimationTimer::calculate(hh,mm,ss,mss);
+    return _timeInSeconds;
 }
 
 
-int Clock::sec()
+/*
+int AnimationTimer::milli()
 {
-    return (_ticks - (_ticks / 1000) * 1000);
+    return _timeInSeconds - floor(_timeInSeconds);
 }
 
 
-int Clock::hour()
+int AnimationTimer::sec()
 {
-    return (_ticks / 3600000);
+    return 0.0f;
 }
 
 
-int Clock::min()
+int AnimationTimer::hour()
 {
-    return ((_ticks % 3600000) / 60000);
+    return 0.0f;
+}
+
+
+int AnimationTimer::min()
+{
+    return 0.0f;
+}
+*/
+
+float AnimationTimer::tick()
+{
+    int a = floor(_timeInSeconds);
+    _timeInSeconds += secondsPerFrame;
+    int b = floor(_timeInSeconds);
+    
+    if (a < b)
+        printf("Time: %d\n", b);
+    return _timeInSeconds;
+}
+
+
+float AnimationTimer::currentTimeInSeconds()
+{
+    return _timeInSeconds;
+}
+
+Action::~Action()
+{
+    // nothing special to be done here
+}
+
+
+ParameterAutomationAction::~ParameterAutomationAction()
+{
+    // nothing special to be done here
+}
+
+
+PlayFileAction::~PlayFileAction()
+{
+    // nothing special to be done here
+    
 }
 
 
 
-void Action::perform()
+void ParameterAutomationAction::perform()
 {
-    param->setTarget(targetValue);
-    param->setMillisecondsToTarget(timeToTarget);
+    ParameterAutomationNode *param = dynamic_cast<ParameterAutomationNode*>(_node);
+    param->setTarget(_targetValue);
+    param->setSecondsToTarget(_timeToTarget);
 }
+
+
+char *ParameterAutomationAction::toString()
+{
+    char *output = (char *)malloc(64);
+    sprintf(output, "Target: %2.2f\tTime To Target: %2.2f", _targetValue, _timeToTarget);
+    return output;
+}
+
+
+PlayFileAction::PlayFileAction(FilePlayerNode* node, bool flag)
+{
+    _node = node;
+    _playing = flag;
+}
+
+
+void PlayFileAction::perform()
+{
+    FilePlayerNode *player = dynamic_cast<FilePlayerNode*>(_node);
+    _playing ? player->play() : player->stop();
+    
+    char *fname = player->getFilename();
+    if (_playing)
+        printf("Playing file %s", fname);
+    else
+        printf("Stopping file %s", fname);
+    
+}
+
+
+char *PlayFileAction::toString()
+{
+    FilePlayerNode* pfnode = dynamic_cast<FilePlayerNode*>(_node);
+    char *fname = pfnode->getFilename();
+    char *output = (char *)malloc(strlen(fname) + 32);
+    if (_playing)
+        sprintf(output, "Play file %s", fname);
+    else
+        sprintf(output, "Stop file %s", fname);
+        
+    return output;
+}
+
 
 
 SoundAnimation::SoundAnimation(const char *instructions)
@@ -76,7 +162,7 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
     char *time = strtok(keyFrame," ");
     if (sscanf(time,"%d:%d:%d.%d", &hour, &minute, &second, &millisecond) == 4) {
         // Do sequencing stuff
-        _time = Clock::calculate(hour, minute, second, millisecond);
+        _time = AnimationTimer::calculate(hour, minute, second, millisecond);
         printf("Key Frame at %02d:%02d:%02d.%03d\t", hour, minute, second, millisecond);
     } else {
         printf("Couldn't understand key frame time description - %s", time);
@@ -178,8 +264,8 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
     
     if (_soundObject) 
     {
-        _action = new Action();
-        _action->timeToTarget = _time;
+        //_action = new Action();
+        //_action->timeToTarget = _time;
 
         char *field;
         while ((field = strtok(NULL," ")))
@@ -193,27 +279,22 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
                 printf("%s=%s\t",name,value);
                 
                 if (strcmp(name,"PLAY") == 0) {
-                    if (strncmp(value,"ON",2) == 0)
-                        cout << "PLAY ON" << endl; //obj->setTargetFor(ANIM_OBJ_PLAY,Param(true));
-                    else
-                        cout << "PLAY OFF" << endl;
-
+                    bool flag = (strncmp(value,"ON",2) == 0);
+                    PlayFileAction *playFileAction = new PlayFileAction(_soundObject,flag);
+                    schedule.push_back(make_pair(_time,playFileAction));
+                    
                 } else if (strcmp(name,"GAIN") == 0) {
                     float g = 0.0f;
                     if (sscanf(value, "%f", &g) == 1) {
-                        ParameterAutomationNode* param = new ParameterAutomationNode(44100);
-                        automations.push_back(param);
-                        _action->param = param;
-                        _action->targetValue = g;
+                        //ParameterAutomationNode* param = new ParameterAutomationNode(44100);
+                        //automations.push_back(param);
+                        //_action->param = param;
+                        //_action->targetValue = g;
                     }
                         
                 }
                 
-                if (_action)
-                    schedule.push_back(make_pair(_time,_action));
 
-                // Schedule the morph to these parameter values
-                
             } else {
                 printf("Parameter setting needs an 'equals' sign: %s\n", tmp);
             }
@@ -245,3 +326,23 @@ vector<FilePlayerNode*>* SoundAnimation::getOutputNodes()
 {
     return &outputNodes;
 }
+
+
+void SoundAnimation::printSchedule()
+{
+    
+    printf ("---------- Schedule ----------\n");
+    list<pair<float,Action*> >::iterator p;
+    for (p = schedule.begin(); p != schedule.end(); p++) 
+    {
+        pair<float, Action*> x = *p;
+        char *f = x.second->toString();
+        printf("Time: %2.2f\t Action: %s\n", x.first, x.second->toString());
+        if (f) 
+            free (f);
+        
+    }
+
+
+}
+
