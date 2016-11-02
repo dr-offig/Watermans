@@ -8,6 +8,14 @@
 
 //enum AnimationObjectType { ANIM_OBJ_TYPE_INVALID, ANIM_OBJ_TYPE_DIRECTIONAL, ANIM_OBJ_TYPE_FIXED };
 
+AnimationTimer::AnimationTimer(float sampleRate)
+{
+    if (sampleRate > 0.0)
+        secondsPerFrame = 1.0f / sampleRate;
+    else
+        secondsPerFrame = 1.0f / 44100.0f;
+    
+}
 
 float AnimationTimer::calculate(int hh, int mm, int ss, int mss)
 {
@@ -20,6 +28,13 @@ float AnimationTimer::calculate(int hh, int mm, int ss, int mss)
 float AnimationTimer::set(int hh, int mm, int ss, int mss)
 {
     _timeInSeconds = AnimationTimer::calculate(hh,mm,ss,mss);
+    return _timeInSeconds;
+}
+
+
+float AnimationTimer::set(float t)
+{
+    _timeInSeconds = t;
     return _timeInSeconds;
 }
 
@@ -51,12 +66,13 @@ int AnimationTimer::min()
 
 float AnimationTimer::tick()
 {
-    int a = floor(_timeInSeconds);
+    //int a = floor(_timeInSeconds);
     _timeInSeconds += secondsPerFrame;
-    int b = floor(_timeInSeconds);
+    //int b = floor(_timeInSeconds);
     
-    if (a < b)
-        printf("Time: %d\n", b);
+    //if (a < b)
+    //    printf("Time: %d\n", b);
+        
     return _timeInSeconds;
 }
 
@@ -66,9 +82,26 @@ float AnimationTimer::currentTimeInSeconds()
     return _timeInSeconds;
 }
 
+
+
 Action::~Action()
 {
     // nothing special to be done here
+}
+
+
+void Action::perform()
+{
+    // shouldn't actually be calling from this abstract class
+    printf("Error: Action is an abstract class, shouldn't reach this function\n");
+}
+
+
+char *Action::toString()
+{
+    char *f = (char *)malloc(32);
+    sprintf(f,"Error: Action is an abstract class\n");    
+    return f;
 }
 
 
@@ -76,14 +109,6 @@ ParameterAutomationAction::~ParameterAutomationAction()
 {
     // nothing special to be done here
 }
-
-
-PlayFileAction::~PlayFileAction()
-{
-    // nothing special to be done here
-    
-}
-
 
 
 void ParameterAutomationAction::perform()
@@ -108,6 +133,25 @@ PlayFileAction::PlayFileAction(FilePlayerNode* node, bool flag)
     _playing = flag;
 }
 
+
+PlayFileAction::PlayFileAction(const PlayFileAction& src) : Action(src), _playing(src._playing)
+{
+
+}
+
+
+PlayFileAction& PlayFileAction::operator=(const PlayFileAction& src)
+{
+    _node = src._node;
+    _playing = src._playing;
+    return *this;
+}
+
+
+PlayFileAction::~PlayFileAction()
+{
+    // nothing special to be done here
+}
 
 void PlayFileAction::perform()
 {
@@ -137,8 +181,161 @@ char *PlayFileAction::toString()
 }
 
 
+LoopFileAction::LoopFileAction(FilePlayerNode* node, bool flag)
+{
+    _node = node;
+    _looping = flag;
+}
 
-SoundAnimation::SoundAnimation(const char *instructions)
+
+LoopFileAction::LoopFileAction(const LoopFileAction& src) : Action(src), _looping(src._looping)
+{
+
+}
+
+
+LoopFileAction& LoopFileAction::operator=(const LoopFileAction& src)
+{
+    _node = src._node;
+    _looping = src._looping;
+    return *this;
+}
+
+
+LoopFileAction::~LoopFileAction()
+{
+    // nothing special to be done here
+}
+
+void LoopFileAction::perform()
+{
+    FilePlayerNode *player = dynamic_cast<FilePlayerNode*>(_node);
+    player->setLooping(_looping);
+}
+
+
+char *LoopFileAction::toString()
+{
+    FilePlayerNode* pfnode = dynamic_cast<FilePlayerNode*>(_node);
+    char *fname = pfnode->getFilename();
+    char *output = (char *)malloc(strlen(fname) + 32);
+    if (_looping)
+        sprintf(output, "Looping file %s", fname);
+    else
+        sprintf(output, "Not looping file %s", fname);
+        
+    return output;
+}
+
+
+
+
+RestartAction::RestartAction(SoundAnimation* animation)
+{
+    _animation = animation;
+}
+
+
+void RestartAction::perform()
+{
+    
+    _animation->restart();
+    // _animation->schedule = _animation->score;
+    // _animation->_clock->set(0.0f);
+    // printf("Restarting animation now\n");
+    // _animation->schedule.printSchedule();
+}
+
+
+char *RestartAction::toString()
+{
+    char *output = (char *)malloc(32);
+    sprintf(output, "Restart animation\n");
+    return output;
+}
+
+
+AnimationSchedule::AnimationSchedule()
+{
+    // nothing to do here    
+}
+
+AnimationSchedule::~AnimationSchedule()
+{
+    // nothing to do here
+}
+
+
+AnimationSchedule::AnimationSchedule(const AnimationSchedule& src) : _agenda(src._agenda)
+{
+    // nothing to do here
+}
+
+
+
+AnimationSchedule& AnimationSchedule::operator=(const AnimationSchedule& src)
+{
+    _agenda = src._agenda;
+    return *this;
+}
+
+
+void AnimationSchedule::add(float t, Action *action)
+{
+    _agenda.push_back(Agendum(t,action));
+    _agenda.sort(AnimationSchedule::order);
+    
+}
+
+
+float AnimationSchedule::nextTime()
+{
+    return _agenda.front()._time;
+}
+
+
+Action* AnimationSchedule::nextAction()
+{
+    return _agenda.front()._action;
+}
+
+
+void AnimationSchedule::pop()
+{
+    _agenda.pop_front();
+}
+
+
+unsigned AnimationSchedule::size()
+{
+    return _agenda.size();
+}
+
+
+bool AnimationSchedule::order (const Agendum& a, const Agendum& b)
+{
+  return ( a._time < b._time );
+}
+
+
+void AnimationSchedule::printSchedule()
+{
+    
+    printf ("---------- Schedule ----------\n");
+    list<Agendum>::iterator p;
+    for (p = _agenda.begin(); p != _agenda.end(); p++) 
+    {
+        char *f = p->_action->toString();
+        printf("Time: %2.2f\t Action: %s\n", p->_time, f);
+        if (f) 
+            free (f);
+        
+    }
+
+}
+
+
+SoundAnimation::SoundAnimation(const char *instructions, AnimationTimer *stopwatch) : _clock(stopwatch)
 {
     // read in the file
     int result = parseSoundAnimationFile(instructions);
@@ -148,9 +345,40 @@ SoundAnimation::SoundAnimation(const char *instructions)
 }
 
 
-/*
-SoundAnimation::~SoundAnimation() { }
-*/
+SoundAnimation::~SoundAnimation()
+{
+    list<Agendum>::iterator p;
+    for (p = score._agenda.begin(); p != score._agenda.end(); p++) 
+    {
+        delete(p->_action);
+    }
+    
+    vector<FilePlayerNode*>::iterator q;
+    for (q = outputNodes.begin(); q != outputNodes.end(); q++) 
+    {
+        delete(*q);
+    }
+}
+
+
+void SoundAnimation::restart()
+{
+    // Rewind all the files
+    vector<FilePlayerNode*>::iterator q;
+    for (q = outputNodes.begin(); q != outputNodes.end(); q++) 
+    {
+        FilePlayerNode *node = *q;
+        node->rewind();
+    }
+
+    schedule = score;
+    _clock->set(0.0f);
+    printf("Restarting animation now\n");
+    schedule.printSchedule();
+    
+    
+}
+
 
 int SoundAnimation::parseKeyFrame(char *keyFrame)
 {
@@ -163,7 +391,8 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
     if (sscanf(time,"%d:%d:%d.%d", &hour, &minute, &second, &millisecond) == 4) {
         // Do sequencing stuff
         _time = AnimationTimer::calculate(hour, minute, second, millisecond);
-        printf("Key Frame at %02d:%02d:%02d.%03d\t", hour, minute, second, millisecond);
+        //printf("Key Frame at %02d:%02d:%02d.%03d\t", hour, minute, second, millisecond);
+        printf("Key Frame at %2.2f\n",_time);
     } else {
         printf("Couldn't understand key frame time description - %s", time);
         return -1;
@@ -178,23 +407,24 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
     char *element = strtok(NULL," ");
     if (strncmp(element,"OBJEC",5) == 0)
     {
-        unsigned slot;
-        if (sscanf(element,"OBJECT[%d]", &slot) == 1)
+        //unsigned slot;
+        if (sscanf(element,"OBJECT[%d]", &_slot) == 1)
         {
             //objectType = ANIM_OBJ_TYPE_DIRECTIONAL;
-            slot--;
-            if (0 <= slot) 
+            _slot--;
+            if (0 <= _slot) 
             {
-                printf("Object Slot read in as #%d\t", slot);                    
-                if (slot < outputNodes.size())
+                printf("Object Slot read in as #%d\t", _slot);                    
+                if (_slot < outputNodes.size())
                 {
-                    printf("Sound Object #%d\t", slot);                    
-                    _soundObject = outputNodes[slot];
+                    printf("Sound Object #%d\t", _slot);                    
+                    _soundObject = outputNodes[_slot];
+                    //_previousTime = previousKeyFrameTimes[slot];
                     //obj = (AnimationObject *)_soundObject;
                 } 
-                else if (slot == outputNodes.size()) 
+                else if (_slot == outputNodes.size()) 
                 {
-                    printf("Creating new object slot #%d\t", slot);                    
+                    printf("Creating new object slot #%d\t", _slot);                    
                     // Create a new sound object - must look for filename
                     char *field = strtok(NULL," ");
                     char *tmp;
@@ -213,6 +443,8 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
                                 filename = strcat(filename,value);
                                 _soundObject = new FilePlayerNode(filename,2,44100);
                                 outputNodes.push_back(_soundObject);
+                                previousKeyFrameTimes.push_back(_time);
+                                //_previousTime = _time;
                                 //obj = (AnimationObject *)_soundObject;
                                 free(filename);
                             }
@@ -236,13 +468,13 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
                 }
                 else
                 {
-                    printf ("Bad slot %d\n", slot);
+                    printf ("Bad slot %d\n", _slot);
                 }
 
             }
             else
             { 
-                printf ("Bad slot %d\n", slot);
+                printf ("Bad slot %d\n", _slot);
             } 
         } 
         else
@@ -255,6 +487,9 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
     {
         // Start the whole animation again. i.e. reset the clock
         printf("Looping back to the beginning of the animation\n");
+        RestartAction *raction = new RestartAction(this);
+        score.add(_time,raction);
+        _clock->set(0.0f);
     }
     else
     {
@@ -277,23 +512,73 @@ int SoundAnimation::parseKeyFrame(char *keyFrame)
                 char *name = field;
                 char *value = tmp + 1;
                 printf("%s=%s\t",name,value);
-                
+                                
                 if (strcmp(name,"PLAY") == 0) {
                     bool flag = (strncmp(value,"ON",2) == 0);
                     PlayFileAction *playFileAction = new PlayFileAction(_soundObject,flag);
-                    schedule.push_back(make_pair(_time,playFileAction));
+                    score.add(_time,playFileAction);
                     
                 } else if (strcmp(name,"GAIN") == 0) {
                     float g = 0.0f;
                     if (sscanf(value, "%f", &g) == 1) {
-                        //ParameterAutomationNode* param = new ParameterAutomationNode(44100);
-                        //automations.push_back(param);
+                        ParameterAutomationAction *paction = new ParameterAutomationAction();
+                        paction->_node = &(_soundObject->sigGain);
+                        paction->_targetValue = g;
+                        float _previousTime = previousKeyFrameTimes[_slot];
+                        paction->_timeToTarget = _time - _previousTime;
+                        score.add(_previousTime, paction);
+                        previousKeyFrameTimes[_slot] = _time;
+                        
+                        //_soundObject->sigGain.setTarget(g);
+                        //_soundObject->sigGain.setFramesToTarget(0);
+                        //printf("Setting gain for %s to %2.2f\n", _soundObject->getFilename(),g);
                         //_action->param = param;
                         //_action->targetValue = g;
                     }
                         
-                }
+                } else if (strcmp(name,"LOOP") == 0) {
+                    bool flag = (strncmp(value,"ON",2) == 0);
+                    LoopFileAction *loopFileAction = new LoopFileAction(_soundObject,flag);
+                    score.add(_time,loopFileAction);
                 
+                    
+                } else if (strcmp(name,"ANGLE") == 0) {
+                    float theta = 0.0f;
+                    if (sscanf(value, "%f", &theta) == 1) {
+                        ParameterAutomationAction *paction = new ParameterAutomationAction();
+                        paction->_node = &(_soundObject->sigAngle);
+                        paction->_targetValue = theta;
+                        float _previousTime = previousKeyFrameTimes[_slot];
+                        paction->_timeToTarget = _time - _previousTime;
+                        score.add(_previousTime, paction);
+                        previousKeyFrameTimes[_slot] = _time;
+                        
+                        //_soundObject->sigGain.setTarget(g);
+                        //_soundObject->sigGain.setFramesToTarget(0);
+                        //printf("Setting gain for %s to %2.2f\n", _soundObject->getFilename(),g);
+                        //_action->param = param;
+                        //_action->targetValue = g;
+                    }
+                        
+                } else if (strcmp(name,"WIDTH") == 0) {
+                    float delta = 5.0f;
+                    if (sscanf(value, "%f", &delta) == 1) {
+                        ParameterAutomationAction *paction = new ParameterAutomationAction();
+                        paction->_node = &(_soundObject->sigWidth);
+                        paction->_targetValue = delta;
+                        float _previousTime = previousKeyFrameTimes[_slot];
+                        paction->_timeToTarget = _time - _previousTime;
+                        score.add(_previousTime, paction);
+                        previousKeyFrameTimes[_slot] = _time;
+                        
+                        //_soundObject->sigGain.setTarget(g);
+                        //_soundObject->sigGain.setFramesToTarget(0);
+                        //printf("Setting gain for %s to %2.2f\n", _soundObject->getFilename(),g);
+                        //_action->param = param;
+                        //_action->targetValue = g;
+                    }
+                        
+                } 
 
             } else {
                 printf("Parameter setting needs an 'equals' sign: %s\n", tmp);
@@ -317,6 +602,10 @@ int SoundAnimation::parseSoundAnimationFile(const char * filename)
         parseKeyFrame(line);
     }
     fclose(instructions);
+    
+    schedule = score;
+    //schedule.sort(SoundAnimation::order);
+    
     return 0;    
     
 }
@@ -325,24 +614,5 @@ int SoundAnimation::parseSoundAnimationFile(const char * filename)
 vector<FilePlayerNode*>* SoundAnimation::getOutputNodes()
 {
     return &outputNodes;
-}
-
-
-void SoundAnimation::printSchedule()
-{
-    
-    printf ("---------- Schedule ----------\n");
-    list<pair<float,Action*> >::iterator p;
-    for (p = schedule.begin(); p != schedule.end(); p++) 
-    {
-        pair<float, Action*> x = *p;
-        char *f = x.second->toString();
-        printf("Time: %2.2f\t Action: %s\n", x.first, x.second->toString());
-        if (f) 
-            free (f);
-        
-    }
-
-
 }
 

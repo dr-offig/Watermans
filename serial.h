@@ -4,7 +4,7 @@
 #define SERIAL_H
 
 
-void readSerialPort();
+float readSerialPort();
 int initSerial(const char *portname, int speed);
 
 #endif

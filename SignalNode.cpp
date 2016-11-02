@@ -5,7 +5,6 @@
 #include <Bela.h>
 //#include <string.h>
 
-
 AudioBuffer::AudioBuffer(unsigned channels, uint64_t frames)
     : _channels(channels), _frames(frames)
 {
@@ -149,6 +148,22 @@ uint64_t SignalNode::nextFrame()
 }
 
 
+void SignalNode::prepare()
+{
+    for (unsigned i=0; i<upstreamNodes.size(); i++)
+        upstreamNodes.at(i)->prepare();
+}
+
+
+
+ParameterAutomationNode::ParameterAutomationNode()
+    : SignalNode(1,44100.0f),
+    _value(0.0f), _target(0.0f), _framesToTarget(0)
+{
+    // Squiddlypop
+}
+
+
 ParameterAutomationNode::ParameterAutomationNode(float sampleRate)
     : SignalNode(1,sampleRate),
     _value(0.0f), _target(0.0f), _framesToTarget(0)
@@ -224,7 +239,7 @@ void ParameterAutomationNode::setSecondsToTarget(float secs)
 void ParameterAutomationNode::recalculateDelta()
 {
     if (_framesToTarget > 0) {
-        _delta = (_value - _target) / ((float)_framesToTarget);    
+        _delta = (_target - _value) / ((float)_framesToTarget);    
     } else {
         _delta = 0;
     }
@@ -234,7 +249,8 @@ void ParameterAutomationNode::recalculateDelta()
 uint64_t ParameterAutomationNode::process()
 {
     if (_framesToTarget <= 0) {
-        _value = _target;
+        if(_value != _target)
+            _value = _target;
     } else {
         _value += _delta;
         _framesToTarget--;
@@ -252,6 +268,10 @@ void ParameterAutomationNode::prepare()
 FilePlayerNode::FilePlayerNode(const char* filename, unsigned channels, uint64_t frames)
     : SignalNode(channels, frames), stream(NULL)
 {
+    upstreamNodes.push_back(&sigGain);
+    upstreamNodes.push_back(&sigAngle);
+    upstreamNodes.push_back(&sigWidth);
+
     stream = new SampleStream(filename, (uint64_t)outputSampleRate);
 }
 
@@ -267,6 +287,10 @@ FilePlayerNode::~FilePlayerNode()
 FilePlayerNode::FilePlayerNode(const FilePlayerNode& s)
     : SignalNode(s)
 {
+    upstreamNodes.push_back(&sigGain);
+    upstreamNodes.push_back(&sigAngle);
+    upstreamNodes.push_back(&sigWidth);
+
     char* filename = s.stream->getFilename();    
     stream = new SampleStream(filename, (uint64_t)outputSampleRate);
 }
@@ -278,6 +302,11 @@ FilePlayerNode& FilePlayerNode::operator=(const FilePlayerNode& s)
     if (stream)
         delete(stream);
     
+    upstreamNodes.clear();
+    upstreamNodes.push_back(&sigGain);
+    upstreamNodes.push_back(&sigAngle);
+    upstreamNodes.push_back(&sigWidth);
+
     char* filename = s.stream->getFilename();    
     stream = new SampleStream(filename, (uint64_t)outputSampleRate);
     
@@ -297,13 +326,20 @@ void FilePlayerNode::stop()
 }
 
 
+void::FilePlayerNode::rewind()
+{
+    stream->rewind();
+}
+
+
 uint64_t FilePlayerNode::process()
 {
     // FilePlayer node has no inputs, just grab samples from the stream
     stream->processFrame();
     for (unsigned ch=0; ch<outputChannels; ch++) 
     {
-        outputBuffer.setSample(ch,0,stream->getSample(ch));
+        float out = stream->getSample(ch) * sigGain.getValue();
+        outputBuffer.setSample(ch,0,out);
     }
 
     return outputChannels;
@@ -324,7 +360,23 @@ char *FilePlayerNode::getFilename()
 }
 
 
+bool FilePlayerNode::setLooping(bool shouldLoop)
+{
+    bool oldValue = (stream->shouldLoop() > 0);
+    shouldLoop ? stream->setShouldLoop(1) : stream->setShouldLoop(0);    
+    return oldValue;    
+}
+
+/*
 void FilePlayerNode::setGain(float g)
 {
     stream->setGain(g);
 }
+
+
+void FilePlayerNode::automateGain(ParameterAutomationNode *param)
+{
+    upstreamNodes.push_back(param);
+}
+*/
+
