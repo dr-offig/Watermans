@@ -101,18 +101,20 @@ int initSerial(const char *portname, int speed)
     return 0;
 }
 
-void readSerialPort() 
+float readSerialPort() 
 {
     int rdlen;
 	rdlen = read(_handle, serialBuffer, SERIAL_BUFFER_SIZE);
 	if (rdlen > 0) {
 		iAzi = serialBuffer[rdlen-1];
 		//azimuth = (float)iAzi;
-		if (iAzi != lastAzi)
-		    printf("%d",iAzi);
+		//if (iAzi != lastAzi)
+		//    printf("%d",iAzi);
 	    lastAzi = iAzi;
 	} 
 	else if (rdlen < 0) 
         printf("Error from read: %d: %s\n", rdlen, strerror(errno));
+        
+    return (float)iAzi / 256.0f;
 }
 

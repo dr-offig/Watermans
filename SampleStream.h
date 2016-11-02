@@ -45,6 +45,7 @@ public:
     float fadeLengthInSeconds();
     char* getFilename();
     void setGain(float g);
+    void rewind();
 
     int frames2Milliseconds(int frames);
     int milliseconds2Frames(int millis);

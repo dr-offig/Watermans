@@ -37,13 +37,13 @@ class SignalNode
 public:
     SignalNode(unsigned channels, float sampleRate);
     SignalNode(BelaContext *context);
-    ~SignalNode();
+    virtual ~SignalNode();
     SignalNode(const SignalNode&);
     SignalNode& operator=(const SignalNode&);
         
     uint64_t nextFrame();
     virtual uint64_t process() = 0;
-    virtual void prepare() = 0;
+    virtual void prepare();
     vector<SignalNode*>upstreamNodes;
 
     unsigned outputChannels;
@@ -64,11 +64,12 @@ private:
 class ParameterAutomationNode : public SignalNode
 {
 public:
+    ParameterAutomationNode();
     ParameterAutomationNode(float sampleRate);
-    ~ParameterAutomationNode();
+    virtual ~ParameterAutomationNode();
     ParameterAutomationNode(const ParameterAutomationNode&);
     ParameterAutomationNode& operator=(const ParameterAutomationNode&);
-
+    
     virtual uint64_t process();
     virtual void prepare();
 
@@ -89,6 +90,11 @@ private:
     uint64_t _framesToTarget;
     float _delta;
 };
+typedef ParameterAutomationNode PAM;
+
+
+
+
 
 
 class FilePlayerNode : public SignalNode
@@ -96,7 +102,7 @@ class FilePlayerNode : public SignalNode
 public:
     FilePlayerNode(const char* filename, unsigned channels, uint64_t frames);
     FilePlayerNode(const char* filename, BelaContext *context);
-    ~FilePlayerNode();
+    virtual ~FilePlayerNode();
     FilePlayerNode(const FilePlayerNode&);
     FilePlayerNode& operator=(const FilePlayerNode&);
 
@@ -105,13 +111,48 @@ public:
 
     void play();
     void stop();
-    void setGain(float g);
-    
+    void rewind();
+    bool setLooping(bool);
+    //void setGain(float g);
+    //void automateGain(ParameterAutomationNode *param);
     char *getFilename();
-
     SampleStream *stream;
 
+    PAM sigGain;
+    //PAM sigPan;
+    PAM sigAngle;
+    PAM sigWidth;
+
 };
+
+
+/***
+class DirectionalPanningNode : public SignalNode
+{
+public:
+    DirectionalPanningNode();
+    virtual ~DirectionalPanningNode();
+    DirectionalPanningNode(const DirectionalPanningNode&);
+    DirectionalPanningNode& operator=(const FilePlayerNode&);
+
+    virtual uint64_t process();
+    virtual void prepare();
+
+    void play();
+    void stop();
+    void rewind();
+    bool setLooping(bool);
+    //void setGain(float g);
+    //void automateGain(ParameterAutomationNode *param);
+    char *getFilename();
+    SampleStream *stream;
+
+    PAM sigGain;
+    PAM sigPan;
+
+};
+*/
+
 
 
 #endif

@@ -108,29 +108,75 @@ void readOSC()
 void checkSchedule()
 {
     while ( (animation->schedule.size() > 0) 
-            && (animation->schedule.front().first < stopwatch->currentTimeInSeconds()) )
+            && (animation->schedule.nextTime() < stopwatch->currentTimeInSeconds()) )
     {
-        Action *action = animation->schedule.front().second;
+        Action* action = animation->schedule.nextAction();
         action->perform();
-        delete(action);
-        animation->schedule.pop_front();
+        animation->schedule.pop();
     }
     
 
 }
 
 
+
+float gaussian(float x, float sigma)
+{
+    return expf(-1.0f * ( x * x  / (2.0f * sigma * sigma))) * (1.0f / (sigma * sqrtf(2.0f * M_PI))); 
+}
+
+
+float triangle(float x, float sigma)
+{
+    float width = 0.25;
+    float output = 0.0f;
+    if (fabs(x) > width)
+        output = 0.0f;
+    else if (width > 0.0)
+        output = 1.0 - (x / width);
+    else
+        output = 1.0;
+    
+    return output;
+}
+
+
+
+
+void directionalPanning(float* output, float azi, float angle, float width)
+{
+    // Assuming an azimuth measured in 256 units around the full circle
+    float w = width / 360.0f;
+    float q = angle / 360.0f;
+    float d = fmod(q - azi, 1.0f);
+    float e = 2.0f * (d - 0.5f);
+    float left_gain = sinf(2.0f * M_PI * d);
+    float right_gain = cosf(2.0f * M_PI * d);
+    //float master_gain = gaussian(e,0.1f);
+    float master_gain = 1.0f;
+    output[0] = left_gain * master_gain;
+    output[1] = right_gain * master_gain;
+
+}
+
+
+void updateAzimuth()
+{
+    azimuth = readSerialPort();
+}
+
+
 bool setup(BelaContext *context, void *userData)
 {
     // Set clock to run at audioSampleRate
-    stopwatch = new AnimationTimer();
-    stopwatch->secondsPerFrame = 1.0f / (context->audioSampleRate);
+    stopwatch = new AnimationTimer(context->audioSampleRate);
+    //stopwatch->secondsPerFrame = 1.0f / (context->audioSampleRate);
  
  
     // Read in the sound animation files
-    animation = new SoundAnimation("sound_animation.txt");
+    animation = new SoundAnimation("sound_animation.txt", stopwatch);
     printf("Animation has %d signal nodes and %d scheduled actions", animation->outputNodes.size(),animation->schedule.size());
-    animation->printSchedule();
+    animation->schedule.printSchedule();
  
     /*
     for(unsigned i=0;i<animation->soundObjects.size();i++) {
@@ -147,6 +193,11 @@ bool setup(BelaContext *context, void *userData)
     scope.setup(ns, context->audioSampleRate);
     */
  
+    //unsigned ns = animation->outputNodes.size();
+    //scope.setup(ns, context->audioSampleRate);
+    scope.setup(3,context->audioSampleRate);
+
+
  
     /***** Prepare Streams *****
     for(int i=0;i<NUM_STREAMS;i++) {
@@ -184,7 +235,7 @@ bool setup(BelaContext *context, void *userData)
 	if((gFillBuffersTask = Bela_createAuxiliaryTask(&fillBuffers, 90, "fill-buffer")) == 0)
 		return false;
 
-    if ((ttyTask = Bela_createAuxiliaryTask(readSerialPort, 50, "bela-arduino-comms")) == 0)
+    if ((ttyTask = Bela_createAuxiliaryTask(updateAzimuth, 50, "bela-arduino-comms")) == 0)
         return false;
 
     if ((checkScheduleTask = Bela_createAuxiliaryTask(checkSchedule, 30, "check-schedule")) == 0)
@@ -241,7 +292,8 @@ void render(BelaContext *context, void *userData)
 
         // Read in audio data from streams
         for(unsigned i=0;i<animation->outputNodes.size();i++) {
-            animation->outputNodes.at(i)->stream->processFrame();
+            //animation->outputNodes.at(i)->stream->processFrame();
+            animation->outputNodes.at(i)->nextFrame();
             //animation->soundObjects.at(i)->update(1);
         }
 
@@ -250,23 +302,39 @@ void render(BelaContext *context, void *userData)
         //     //animation->soundBeds.at(i)->update(1);
         // }
 
+        float outputFrame[2]; outputFrame[0] = 0.0f; outputFrame[1] = 0.0f;
+        float panning[2]; panning[0] = 0.5f; panning[1] = 0.5f;
         
-        // Output audio
-    	for(unsigned int channel = 0; channel < context->audioOutChannels; channel++) {
+        for(unsigned i=0;i<animation->outputNodes.size();i++) {
+            
+            // Output audio
+    	    //for(unsigned int channel = 0; channel < context->audioOutChannels; channel++) {
     	    
-            float out = 0.0f;
-            for(unsigned i=0;i<animation->outputNodes.size();i++) {
-                // get samples for each channel from each sampleStream object
-                out += animation->outputNodes.at(i)->stream->getSample(channel);
-            }
+            //float out = 0.0f;
+            // get samples for each channel from each sampleStream object
+            //out += animation->outputNodes.at(i)->stream->getSample(channel);
+            float angle = animation->outputNodes.at(i)->sigAngle.getValue();
+            float width = animation->outputNodes.at(i)->sigWidth.getValue();
+            //float tmpFrame[2];                
+            directionalPanning(panning,azimuth,angle,width);                
+            if (i==0)
+                scope.log(azimuth, panning[0],panning[1]);
+            outputFrame[0] += panning[0] * animation->outputNodes.at(i)->stream->getSample(0);
+            outputFrame[1] += panning[1] * animation->outputNodes.at(i)->stream->getSample(1);
 
-            scope.log(out);
+            //out += animation->outputNodes.at(i)->outputBuffer.getSample(channel,0);
+            //    if (channel == 0 && i == 0)
+            //        scope.log(animation->outputNodes.at(i)->sigGain.getValue(),animation->outputNodes.at(i)->stream->getSample(channel));
+                //}
 
             // you may need to attenuate the output depending on the amount of streams playing back
-            float compressedOut = tanh(out);
-            audioWrite(context, n, channel, compressedOut);
+//            float compressedOut = tanh(out);
+//            audioWrite(context, n, channel, compressedOut);
             
     	}
+        audioWrite(context, n, 0, outputFrame[0]);
+        audioWrite(context, n, 1, outputFrame[1]);
+        
     
         stopwatch->tick();
     	

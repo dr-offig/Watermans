@@ -176,12 +176,12 @@ void SampleStream::fillBuffer() {
         if(gBufferReadPtr>=gNumFramesInFile) 
         {
             gBufferReadPtr=0;
-            if (gLooping == 0) {
-                printf("Finished playing file %s\n", gFilename);
-                togglePlaybackWithFade(-1,0.001);
-            } else {
-                printf("Looping file %s\n", gFilename);
-            }
+            // if (gLooping == 0) {
+            //     printf("Finished playing file %s\n", gFilename);
+            //     togglePlaybackWithFade(-1,0.001);
+            // } else {
+            //     printf("Looping file %s\n", gFilename);
+            // }
         }
         
         int endFrame = gBufferReadPtr + gBufferLength;
@@ -313,6 +313,17 @@ int SampleStream::milliseconds2Frames(int millis) {
 float SampleStream::fadeLengthInSeconds()
 {
     return gFadeLengthInSeconds;
+}
+
+
+void SampleStream::rewind()
+{
+    bool wasPlaying = gPlaying;
+    if (wasPlaying) 
+        togglePlaybackWithFade(-1,0.01);
+    sf_seek(sndfile,0,SEEK_SET);
+    if (wasPlaying)
+        togglePlaybackWithFade(1,0.01);
 }
 
 
